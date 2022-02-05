@@ -1,0 +1,242 @@
+---
+title: "Horror Movies Analysis"
+author: "Yarden Wolf & Gilad Shappir"
+date: "20 6 2021"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<img src="https://georgetownvoice.com/wp-content/uploads/2019/09/it-chapter-two.jpg"width="1000" height="350">
+
+## <span style="color:darkred">Background
+
+<p style = "font-size:14pt">In this project, We will analyze [this]('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-10-22/horror_movies.csv') data of Horror Movies.</p>
+
+## <span style="color:darkred">Introduction
+
+In our project, We will focus on two main questions:
+
+1. Is the expectancy of Horror Movie ratings in the USA is equal to the expectancy of Horror Movie ratings every where else. In order to check the difference between the expected values we will check if the variances of the two are equal to each other.
+
+2. Find the Linear Regression and Correlation between the year the movie was released in and it's budget. (axes x - year of release, axes y - movie's budget).
+
+## <span style="color:darkred">Part One - Data Import & Tidying
+The data set was in an csv file - a convenient format to work with.
+
+Libraries:
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(gridExtra)
+library(grid)
+library(lattice)
+library(dplyr)
+library(flextable)
+library(magrittr)
+library(tinytex)
+```
+
+We removed Not Available values from the review rating column in order to make our calculations easier.
+In addition, We added a new column to know witch movies were made in USA.
+
+Finally, for display reasons, we removed some of the columns because they contain a lot of text.
+
+<p style = "font-size:14pt">Showing some of the lines from the data base that we will use in our project:</p>
+
+```{r read horror movies dataset, message=FALSE}
+horror_movies <-readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-10-22/horror_movies.csv') %>%
+  na.omit(review_rating) %>%
+  view()
+
+horror_movies <- subset(horror_movies, select = -c(release_date, language, movie_rating, plot, cast, genres, filming_locations))
+Data_Table <- horror_movies[1:5, ]
+Data_Table %>%
+  kbl() %>%
+  kable_material_dark() %>%
+  row_spec(0, bold = T, color = "white", background =  "darkred") %>%
+  row_spec(1:5, bold = T, color = "white", background =  "black")
+
+horror_movies_new <- horror_movies %>%
+  na.omit(review_rating) %>%
+  mutate(is_USA = (release_country == 'USA')) %>%
+  view()
+```
+
+
+## <span style="color:darkred">Part Two - Visualization & Modeling 
+
+## <span style="color:darkred">First Test: Variance Of Two Semples & Difference In Means
+First, We will start with a variance check in order to know whether the variance of review ratings for USA movies is equal to the variance of the review ratings for movies in rest of the world.
+
+Our basic hypothesis is that the variance of review ratings for USA movies is equal to the variance of the review ratings for movies in rest of the world.
+
+$$ H_{0}: \sigma_{1}^2 = \sigma_{2}^2 $$
+$$ H_{1}: \sigma_{1}^2 \ne \sigma_{2}^2 $$
+
+<p style = "font-size:14pt">Visualization and Modeling:</p>
+
+```{r visualization dataset of f-test}
+horror_movies_new <- horror_movies %>%
+  mutate(is_USA = (release_country == 'USA')) %>%
+  view()
+
+USA_review_rating <- horror_movies_new %>%
+  filter(is_USA == 'TRUE') %>%
+  na.omit(review_rating) 
+
+World_review_rating <- horror_movies_new %>%
+  filter(is_USA == 'FALSE') %>%
+  na.omit(review_rating)
+
+var.test(x = USA_review_rating$review_rating, y = World_review_rating$review_rating, ratio = 1, alternative = c("two.sided"), conf.level = 0.95)
+```
+
+Conclusion from the F test: 
+We got a p-value that is smaller than the confidence level of our test. That leads us to the conclusion that the variances of the review rating are different for the USA and the rest of the world.
+
+In our graph you can see that the variance of the review ratings for movies that were made in USA is greater than the variance of the review ratings for movies that were made else where.
+
+```{r graph F test}
+ggplot(horror_movies_new, aes(x = review_rating, color = is_USA)) + geom_histogram(binwidth = 1)
+```
+
+In the previous test we found out that the variance of review ratings for USA movies is different from the variance of the review ratings for movies in rest of the world.
+
+Now, we will check the Difference in means between every group.
+
+Our basic hypothesis is that the difference of means between the review ratings for USA movies and the review ratings for movies in rest of the world is equal to 0.
+
+$$ H_{0}: \mu_{1}^2 - \mu_{2}^2 = 0 $$
+$$ H_{1}: \mu_{1}^2 - \mu_{2}^2 \ne 0 $$
+<p style = "font-size:14pt">Visualization and Modeling:</p>
+
+```{r visualization dataset of t-test}
+set.seed(0)
+horror_movies_data <- horror_movies_new %>%
+  na.omit(review_rating) %>%
+  sample_n(100)
+t.test(formula = review_rating ~ is_USA, data = horror_movies_data, alternative = "two.sided", conf.level = 0.95)
+```
+
+Conclusion from the T test: 
+As you can see, by the P-Value and the means that we've got from the test that our basic hypothesis is correct. 
+The review ratings for movies that were made in USA is equal to the review ratings in rest of the world.
+
+In our graph you can see how many movies in each place got their review ratings:
+```{r graph T test}
+IN_USA <- horror_movies_new$is_USA 
+horror_density <- ggplot(horror_movies_new, aes(x = review_rating, color = IN_USA)) + geom_density()
+horror_box_plot <- ggplot(horror_movies_new, aes(x = review_rating, y = IN_USA)) + geom_boxplot(aes(fill = IN_USA))
+
+horror_movies_in_usa <- horror_movies_new %>%
+  filter(is_USA == "TRUE")
+mean(horror_movies_in_usa$review_rating)
+
+horror_movies_out_usa <- horror_movies_new %>%
+  filter(is_USA == "FALSE")
+mean(horror_movies_out_usa$review_rating)
+
+grid.arrange(horror_density, horror_box_plot, nrow = 2)
+```
+
+As you can see from the density graph, although the density of the ratings for movies that were made outside USA has a greater peak around 5, the area between 3 and 7 looks very similar for both of the groups. We can see it more clearly in the boxplot graph, where the mean of review ratings movies in USA is 4.982, and outside USA is 4.997.
+This conclusion resonates well with the T test we made which shows that the two groups have the same mean for review rating.
+
+
+## <span style="color:darkred">Second Test: Simple Linear Regression 
+In our test, we would like to know if the budget for horror movies has grown over the years.
+We will do a Linear Regression test that will show the connection between the release year and the movie's budget.
+
+$$ Y = \beta_{0} + \beta_{1}X + \epsilon $$
+
+<p style = "font-size:14pt">Transformation:</p>
+
+```{r linear regression test, message=FALSE, warning=FALSE}
+horror_movies_regression <- horror_movies_new %>%
+  na.omit(budget) %>%
+  mutate(budget_value = (parse_number(budget))) %>%
+  mutate(release_year = (parse_number(title))) %>%
+  na.omit(release_year) %>%
+  filter(is_USA == 'TRUE') %>%
+  filter(release_year > 2000) %>%
+  filter(release_year < 3000) %>%
+  filter(budget_value < 10000000) %>%
+  view()
+```
+
+<p style = "font-size:14pt">Visualization:</p>
+
+```{r visualization dataset of Linear Regression, message=FALSE, warning=FALSE}
+horror_bar <- ggplot(horror_movies_regression, aes(x = release_year, y = budget_value)) + geom_col(fill = "darkorange", color = "black") + scale_y_log10() + scale_x_continuous(limits = c(2000, 2025)) + scale_y_continuous(labels = scales::comma_format()) + theme_bw() + xlab("Year") + ylab("Budget")
+
+horror_point <- ggplot(horror_movies_regression, aes(x = release_year, y = budget_value)) + geom_point(color = "black") + scale_y_log10() + scale_y_continuous(labels = scales::comma_format()) + scale_x_continuous(limits = c(2000, 2025)) + theme_bw() + xlab("Year") + ylab("Budget") + stat_smooth(method = "lm", color = "red") + ggtitle("Y = -351.465 + 0.181X") 
+
+grid.arrange(horror_bar, horror_point, nrow = 2)
+```
+
+Conclusion from the visualization on the Linear Regression: 
+As you can see from the graph, there is a clear increase in the budget for horror movies as the years gone by.
+
+Important note: as you can see from the values of the budget in the point graph, we minimized the data in order to make the linear regression easier to visualize.
+
+<p style = "font-size:14pt">Modeling:</p>
+
+We will represent the F test on the Linear Regression in order to show that there is a connection between Y and X. Meaning, to show that there is a connection between the budget for horror movies and the years the films were made.
+Our basic hypothesis is that the budget hasn't increased as the years gone by, and the alternative hypothesis is that the budget has increased as the years gone by.
+
+$$ H_{0}: \beta_{1} = 0 $$
+$$ H_{1}: \beta_{1} \ne 0 $$
+
+```{r Modeling dataset of Linear Regression, message=FALSE, warning=FALSE}
+horror_movies_lm <- lm(formula = log(budget_value) ~ release_year, data = horror_movies_regression, conf.level = 0.95)
+summary(horror_movies_lm) 
+```
+Conclusion from the modeling on the Linear Regression: 
+As you can see, by the P-value we've got from the test, that is smaller from the level of significance alpha = 0.05), that our call is to reject the null hypothesis. Therefore, that is a connection between the budget for horror movies and the years that the films were made.
+
+<p style = "font-size:14pt">Modeling - Linear Regression Equation:</p> 
+
+```{r Modeling equation dataset of Linear Regression, message=FALSE, warning=FALSE}
+horror_movies_lm
+```
+As you can see, the linear regression equation is:
+
+$$ Y = -351.465 + 0.181X $$
+That means that there is a positive connection between the budget for horror movies and the years that the films were made.
+This conclusion resonates well with the graphic representation that we've shown earlier.
+
+<p style = "font-size:14pt">Visualization Of The Residuals:</p>
+
+```{r visualization residuals Linear Regression, message=FALSE, warning=FALSE}
+residuals_plot <- horror_movies_lm %>%
+  ggplot(aes(x = .fitted, y = .resid)) + geom_point(alpha = 0.1) + geom_hline(yintercept = 0, color = "red") + labs(title = "Residuals Plot")
+
+residuals_qq <- horror_movies_lm %>%
+  ggplot(aes(sample = .resid)) + geom_qq() + geom_qq_line(col="red") + labs(title = "Quantile-Quantile Plot")
+
+grid.arrange(residuals_plot, residuals_qq, nrow = 2)
+```
+
+There are two assumptions that must be:
+
+• residuals are homoscedastic.
+
+• residuals are distributed normally.
+
+The residuals plot doesn't look homoscedastic.
+Our QQ plot shows that our residuals are not distributed normal throughout the range of samples.
+Given the R-squared and problematic distribution of residuals, the model we have created seems to be unsuitable for predicting models.
+
+## <span style="color:darkred">Part Three - Discussion & Summary
+
+We have covered some techniques to manipulate or change the format of a dataframe. We have also created some basic plots such as boxplot, density, qqplot. In addition, there is no limit to the exploratory data analysis process. We can approach the dataframe from a specific point of view depending on our needs. For instance, We could perform a multiple linear regression test for the relationship between the explanatory variables, length and position of the film, versus the age of the person that could see the film. So, it is better to practice with different kind of datasets.
+
+We really enjoyed and learned a lot from the making the project. We think it is a good preparation for the execution of similar projects in the future for companies in the industry.
+
+
+<img src="https://sd.keepcalms.com/i/keep-calm-horrorhound-and-watch-horror-movies.png"width="1000" height="600">
